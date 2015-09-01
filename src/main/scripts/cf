@@ -35,6 +35,11 @@ def cli():
     pass
 
 
+@cli.group(help="Generate config files")
+def generate():
+    pass
+
+
 @cli.command(help="Sync AWS resources with definition file")
 @click.argument('filename', type=click.Path(exists=True))
 @click.option('--debug', is_flag=True, default=False, help="Debug output")
@@ -74,6 +79,12 @@ def convert(filename, debug):
         LOGGER.error("Error converting {0}:".format(filename))
         LOGGER.exception(e)
         sys.exit(1)
+
+
+@generate.command(help="Generate stacks.yml config file.")
+@click.argument('filename', type=click.Path())
+def config(filename):
+    print filename
 
 
 if __name__ == '__main__':
