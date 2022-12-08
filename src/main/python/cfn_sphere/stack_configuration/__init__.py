@@ -34,10 +34,20 @@ class Config(object):
         self.region = config_dict.get("region")
         self.stack_name_suffix = stack_name_suffix
 
+        metadata_file = self._find_metadata_file(self.stack_config_base_dir)
+        if metadata_file:
+            metadata_tags = self._read_metadata_tags(metadata_file)
+
+        stage = self._find_stage_tag()
+        if stage:
+            metadata_tags['stage'] = stage
+
         self.default_service_role = config_dict.get("service-role")
         self.default_stack_policy_url = config_dict.get("stack-policy-url")
         self.default_timeout = config_dict.get("timeout", 600)
         self.default_tags = config_dict.get("tags", {})
+        
+        self.default_tags.update(metadata_tags)
         self.default_tags.update(self.cli_tags)
         self.default_failure_action = config_dict.get("on_failure", "ROLLBACK")
         self.default_disable_rollback = config_dict.get("disable_rollback", False)
@@ -114,7 +124,51 @@ class Config(object):
             tags[k] = v
         return tags
 
-        
+    def _read_metadata_tags(self, file):
+        loader = FileLoader()
+        metadata = loader.get_yaml_or_json_file(file, working_dir=os.getcwd())
+
+        tags = {}
+
+        # If we don't even have ID, we can't go further
+        if not metadata.get('id'):
+            return {}
+
+        tags["service-id"] = metadata["id"]
+
+        tags["component-id"] = metadata.get('orgId', 'Scout24') + "/" + metadata["id"]
+
+        return tags
+
+    def _find_metadata_file(self, basedir):
+        f = None
+
+        _, cur = os.path.splitdrive(basedir)
+
+        for i in range(1000):
+            possibility = os.path.join(cur, "metadata.yaml")
+            if os.path.isfile(possibility):
+                self.logger.info("found metadata.yaml: " + possibility)
+                f = possibility
+                break
+            cur, _ = os.path.split(cur)
+
+        return f
+
+    def _find_stage_tag(self):
+        stage = None
+
+        for env in ['ENVIRONMENT', 'STAGE']:
+            envVal = os.environ.get(env)
+            if envVal and stage and envVal != stage:
+                raise CfnSphereException("stage from %s (%s) conflicts with other value (%s)" % (env, envVal, stage))
+
+            if envVal in ['dev', 'pro', 'box']:
+                stage = envVal
+            else:
+                self.logger.info("environment variable %s has invalid stage name %s, ignoring" % (env, envVal))
+
+        return stage
 
     def _parse_stack_configs(self, config_dict):
         """
