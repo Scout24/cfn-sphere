@@ -49,6 +49,9 @@ class Config(object):
         
         self.default_tags.update(metadata_tags)
         self.default_tags.update(self.cli_tags)
+
+        self.default_tags["cfn_sphere"] = "yes"
+
         self.default_failure_action = config_dict.get("on_failure", "ROLLBACK")
         self.default_disable_rollback = config_dict.get("disable_rollback", False)
         self.default_termination_protection = config_dict.get("termination_protection", False)
@@ -128,17 +131,19 @@ class Config(object):
         loader = FileLoader()
         metadata = loader.get_yaml_or_json_file(file, working_dir=os.getcwd())
 
-        tags = {}
-
         # If we don't even have ID, we can't go further
         if not metadata.get('id'):
             return {}
 
-        tags["service-id"] = metadata["id"]
+        service_id = metadata["id"]
+        component_id = metadata.get('orgId', 'Scout24') + "/" + metadata["id"]
+        self.logger.info("Determined service-id to be %s" % service_id)
+        self.logger.info("Determined component-id to be %s" % component_id)
 
-        tags["component-id"] = metadata.get('orgId', 'Scout24') + "/" + metadata["id"]
-
-        return tags
+        return {
+            "service-id": service_id,
+            "component-id": component_id,
+        }
 
     def _find_metadata_file(self, basedir):
         f = None
@@ -161,12 +166,17 @@ class Config(object):
         for env in ['ENVIRONMENT', 'STAGE']:
             envVal = os.environ.get(env)
             if envVal and stage and envVal != stage:
-                raise CfnSphereException("stage from %s (%s) conflicts with other value (%s)" % (env, envVal, stage))
+                raise CfnSphereException("Stage from %s (%s) conflicts with other value (%s)" % (env, envVal, stage))
 
             if envVal in ['dev', 'pro', 'box']:
                 stage = envVal
-            else:
-                self.logger.info("environment variable %s has invalid stage name %s, ignoring" % (env, envVal))
+            elif envVal:
+                self.logger.info("Environment variable %s has invalid stage name %s, ignoring" % (env, envVal))
+
+        if stage:
+            self.logger.info("Determined stage to be " + stage)
+        else:
+            self.logger.info("unable to find stage automatically")
 
         return stage
 
