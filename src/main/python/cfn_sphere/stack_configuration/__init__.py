@@ -50,7 +50,7 @@ class Config(object):
         self.default_tags.update(metadata_tags)
         self.default_tags.update(self.cli_tags)
 
-        self.default_tags["cfn_sphere"] = "yes"
+        self.default_tags["iac-tool"] = "cfn-sphere"
 
         self.default_failure_action = config_dict.get("on_failure", "ROLLBACK")
         self.default_disable_rollback = config_dict.get("disable_rollback", False)
