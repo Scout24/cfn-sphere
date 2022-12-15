@@ -149,7 +149,10 @@ class Config(object):
         f = None
 
         _, cur = os.path.splitdrive(basedir)
-
+        # We have an extra limit of 1000 possible directory depth.  This is high
+        # enough that it's unlikely to be hit in reality but creates a sufficient
+        # upper bounds to the number of invocations so as not to deadlock the
+        # program
         for i in range(1000):
             possibility = os.path.join(cur, "metadata.yaml")
             if os.path.isfile(possibility):
