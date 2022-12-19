@@ -89,7 +89,7 @@ Cfn-Sphere supports native cloudformation templates written in JSON or YAML, loc
 
 Requirements:
 
-* python >= 2.6
+* python >= 2.6, <=3.9 -- unittest2 cannot run on python3.10 due to the collections.MutableMapping -> collections.abc.MutableMapping rename
 * virtualenv
 * pybuilder
 
@@ -97,7 +97,7 @@ Execute:
 
     git clone https://github.com/cfn-sphere/cfn-sphere.git
     cd cfn-sphere
-    virtualenv .venv --python=python2.7
+    virtualenv .venv --python=python3.9
     source .venv/bin/activate
     pip install pybuilder
     pyb install_dependencies

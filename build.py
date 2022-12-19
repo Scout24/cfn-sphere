@@ -12,7 +12,7 @@ use_plugin("python.distutils")
 use_plugin('copy_resources')
 use_plugin('filter_resources')
 
-name = "cfn-sphere"
+name = "s24-cfn-sphere"
 
 authors = [Author('Marco Hoyer', 'marco_hoyer@gmx.de')]
 description = "cfn-sphere - A CLI tool intended to simplify AWS CloudFormation handling."
