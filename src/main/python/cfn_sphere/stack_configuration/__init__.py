@@ -35,8 +35,9 @@ class Config(object):
         self.stack_name_suffix = stack_name_suffix
 
         metadata_file = self._find_metadata_file(self.stack_config_base_dir)
+        metadata_tags = {}
         if metadata_file:
-            metadata_tags = self._read_metadata_tags(metadata_file)
+            metadata_tags.update(self._read_metadata_tags(metadata_file))
 
         stage = self._find_stage_tag()
         if stage:
@@ -147,6 +148,9 @@ class Config(object):
 
     def _find_metadata_file(self, basedir):
         f = None
+
+        if not basedir:
+            basedir = os.getcwd()
 
         _, cur = os.path.splitdrive(basedir)
         # We have an extra limit of 1000 possible directory depth.  This is high
