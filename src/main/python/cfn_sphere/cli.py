@@ -41,6 +41,8 @@ def get_first_account_alias_or_account_id():
 
 
 def check_update_available():
+    # Disable update checking completely, but in a way that will cause fewest merge conflicts
+    return
     latest_version = get_latest_version()
     if latest_version and __version__ != latest_version:
         click.confirm(
