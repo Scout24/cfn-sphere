@@ -102,6 +102,17 @@ Execute:
     pip install pybuilder
     pyb install_dependencies
     pyb
+    
+To put on FASt artifactory: 
+    
+    pip install twine
+    python setup.py sdist
+    twine upload --repository-url https://fast.cloud.scout24.com/artifactory/api/pypi/pypi-local -p $FAST_TOKEN -u $FAST_USER dist/*
+    
+To check if you can install from FASt:
+
+    pip search s24-cfn-sphere --index https://${FAST_USER}:${FAST_TOKEN}@fast.cloud.scout24.com/artifactory/api/pypi/pypi-local/
+    pip install --index-url=https://${FAST_USER}:${FAST_TOKEN}@fast.cloud.scout24.com/artifactory/api/pypi/pypi-local/simple --upgrade s24-cfn-sphere
 
 ## Contribution
 
