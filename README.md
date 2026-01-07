@@ -97,7 +97,7 @@ Execute:
 
     git clone https://github.com/cfn-sphere/cfn-sphere.git
     cd cfn-sphere
-    virtualenv .venv --python=python3.10
+    virtualenv .venv --python=python3.12
     source .venv/bin/activate
     pip install pybuilder
     pyb install_dependencies

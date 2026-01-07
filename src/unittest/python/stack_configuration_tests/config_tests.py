@@ -63,10 +63,9 @@ class ConfigTests(TestCase):
         self.assertEqual(1, len(config.stacks.keys()))
         self.assertTrue(isinstance(config.stacks['any-stack'], StackConfig))
         self.assertEqual('foo.json', config.stacks['any-stack'].template_url)
-        self.assertDictContainsSubset({'any-tag': 'any-tag-value', 'global-tag': 'global-tag-value'},
-                                      config.stacks['any-stack'].tags)
-        self.assertDictContainsSubset({'global-tag': 'global-tag-value'}, config.default_tags)
-        self.assertDictContainsSubset({'any-parameter': 'any-value'}, config.stacks['any-stack'].parameters)
+        self.assertTrue({'any-tag': 'any-tag-value', 'global-tag': 'global-tag-value'}.items() <= config.stacks['any-stack'].tags.items())
+        self.assertTrue({'global-tag': 'global-tag-value'}.items() <= config.default_tags.items())
+        self.assertTrue({'any-parameter': 'any-value'}.items() <= config.stacks['any-stack'].parameters.items())
         self.assertEqual(99, config.stacks['any-stack'].timeout)
 
     def test_default_service_role_is_used_if_not_overwritten_by_stack_config(self):
