@@ -105,8 +105,9 @@ Execute:
     
 To put on FASt artifactory: 
     
-    pip install twine
-    python setup.py sdist
+    pip install twine build
+    cd target/dist/s24-cfn-sphere-*/
+    python -m build --sdist
     twine upload --repository-url https://fast.cloud.scout24.com/artifactory/api/pypi/pypi-local -p $FAST_TOKEN -u $FAST_USER dist/*
     
 To check if you can install from FASt:

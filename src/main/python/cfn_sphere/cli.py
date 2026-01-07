@@ -96,8 +96,8 @@ def sync(config, parameter, suffix, debug, confirm, yes, tags):
             stage_value = config.default_tags['stage']
             if stage_value not in ALLOWED_STAGES:
                 LOGGER.warning(
-                    f"Invalid stage value: '{stage_value}'. "
-                    f"Must be one of: {', '.join(ALLOWED_STAGES)}"
+                    "Invalid stage value: '{0}'. Must be one of: {1}".format(
+                        stage_value, ', '.join(ALLOWED_STAGES))
                 )
 
         StackActionHandler(config).create_or_update_stacks()
