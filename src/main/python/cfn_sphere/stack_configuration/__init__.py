@@ -132,19 +132,25 @@ class Config(object):
         loader = FileLoader()
         metadata = loader.get_yaml_or_json_file(file, working_dir=os.getcwd())
 
-        # If we don't even have ID, we can't go further
-        if not metadata.get('id'):
-            return {}
+        tags = {}
+        
+        # Only create service-id and component-id if id exists
+        if metadata.get('id'):
+            service_id = metadata["id"]
+            component_id = metadata.get('orgId', 'Scout24') + "/" + metadata["id"]
+            tags['service-id'] = service_id
+            tags['component-id'] = component_id
+            self.logger.info("Determined service-id to be %s" % service_id)
+            self.logger.info("Determined component-id to be %s" % component_id)
+        
+        if metadata.get('confidentiality'):
+            tags['confidentiality'] = metadata['confidentiality']
+        
+        criticality_value = metadata.get('criticality', {}).get('value')
+        if criticality_value:
+            tags['criticality'] = criticality_value
 
-        service_id = metadata["id"]
-        component_id = metadata.get('orgId', 'Scout24') + "/" + metadata["id"]
-        self.logger.info("Determined service-id to be %s" % service_id)
-        self.logger.info("Determined component-id to be %s" % component_id)
-
-        return {
-            "service-id": service_id,
-            "component-id": component_id,
-        }
+        return tags
 
     def _find_metadata_file(self, basedir):
         f = None

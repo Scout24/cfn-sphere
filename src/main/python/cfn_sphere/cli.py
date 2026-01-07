@@ -89,6 +89,17 @@ def sync(config, parameter, suffix, debug, confirm, yes, tags):
 
     try:
         config = Config(config_file=config, cli_params=parameter, cli_tags=tags, stack_name_suffix=suffix)
+
+        # Stage tag value validation
+        ALLOWED_STAGES = ['dev', 'pro', 'box', 'stg', 'loc', 'glo']
+        if 'stage' in config.default_tags:
+            stage_value = config.default_tags['stage']
+            if stage_value not in ALLOWED_STAGES:
+                LOGGER.warning(
+                    f"Invalid stage value: '{stage_value}'. "
+                    f"Must be one of: {', '.join(ALLOWED_STAGES)}"
+                )
+
         StackActionHandler(config).create_or_update_stacks()
     except CfnSphereException as e:
         LOGGER.error(e)
