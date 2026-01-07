@@ -97,7 +97,7 @@ Execute:
 
     git clone https://github.com/cfn-sphere/cfn-sphere.git
     cd cfn-sphere
-    virtualenv .venv --python=python3.10
+    virtualenv .venv --python=python3.12
     source .venv/bin/activate
     pip install pybuilder
     pyb install_dependencies
@@ -105,8 +105,9 @@ Execute:
     
 To put on FASt artifactory: 
     
-    pip install twine
-    python setup.py sdist
+    pip install twine build
+    cd target/dist/s24-cfn-sphere-*/
+    python -m build --sdist
     twine upload --repository-url https://fast.cloud.scout24.com/artifactory/api/pypi/pypi-local -p $FAST_TOKEN -u $FAST_USER dist/*
     
 To check if you can install from FASt:
