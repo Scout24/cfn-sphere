@@ -8,13 +8,66 @@ except ImportError:
 from mock import patch
 
 from cfn_sphere.exceptions import CfnSphereException
-from cfn_sphere.stack_configuration import Config, StackConfig, InvalidConfigException
+from cfn_sphere.stack_configuration import Config, StackConfig, InvalidConfigException, _component_identity_from_git_url, _resolve_component_identity
 
 
 class ConfigTests(TestCase):
     def setUp(self):
         self.stack_config_a = self.create_stack_config()
         self.stack_config_b = self.create_stack_config()
+
+    def test_component_identity_normalizes_git_url(self):
+        component_id, service_id, repository_name = _component_identity_from_git_url(
+            'git@github.com:Scout24/__Example Service!.' + 'a' * 70 + '.git')
+
+        self.assertEqual('scout24/exampleservice.' + 'a' * 48, component_id)
+        self.assertEqual('exampleservice.' + 'a' * 48, service_id)
+        self.assertTrue(repository_name.startswith('__Example Service!.'))
+
+    def test_component_identity_allows_flowfact(self):
+        component_id, service_id, _ = _component_identity_from_git_url('https://github.com/FLOWFACT/Example-Service.git')
+        self.assertEqual('flowfact/example-service', component_id)
+        self.assertEqual('example-service', service_id)
+
+    def test_component_identity_rejects_unsupported_organization(self):
+        with self.assertRaises(CfnSphereException):
+            _component_identity_from_git_url('https://github.com/OtherOrg/service.git')
+
+    @patch.dict(os.environ, {'GITHUB_REPOSITORY': 'FLOWFACT/Example-Service', 'GIT_URL': 'git@github.com:Scout24/ignored.git', 'GIT_URL_1': 'another'}, clear=True)
+    def test_github_repository_takes_precedence(self):
+        self.assertEqual(('flowfact/example-service', 'example-service', 'Example-Service'), _resolve_component_identity(os.getcwd()))
+
+    @patch.dict(os.environ, {'GIT_URL': 'git@github.com:Scout24/service.git', 'GIT_URL_1': 'another'}, clear=True)
+    def test_multiple_jenkins_urls_require_github_repository(self):
+        with self.assertRaisesRegex(CfnSphereException, 'GITHUB_REPOSITORY'):
+            _resolve_component_identity(os.getcwd())
+
+    @patch('cfn_sphere.stack_configuration._read_git_remotes', return_value=['git@github.com:Scout24/remote-service.git'])
+    @patch.dict(os.environ, {}, clear=True)
+    def test_sole_remote_is_used_when_ci_variables_are_absent(self, _read_git_remotes):
+        self.assertEqual(('scout24/remote-service', 'remote-service', 'remote-service'), _resolve_component_identity('/nested/deploy/cdk'))
+
+    @patch('cfn_sphere.stack_configuration._read_git_remotes', return_value=['git@github.com:Scout24/one.git', 'git@github.com:Scout24/two.git'])
+    @patch.dict(os.environ, {}, clear=True)
+    def test_multiple_remotes_require_github_repository(self, _read_git_remotes):
+        with self.assertRaisesRegex(CfnSphereException, 'GITHUB_REPOSITORY'):
+            _resolve_component_identity('/nested/deploy/cdk')
+
+    @patch('cfn_sphere.stack_configuration.get_logger')
+    @patch.object(Config, '_read_metadata_tags', return_value={'service-id': 'derived-service', 'component-id': 'scout24/derived-service'})
+    @patch.object(Config, '_find_metadata_file', return_value='metadata.yaml')
+    def test_derived_identity_tags_override_default_cli_and_stack_tags(self, _find_metadata_file, _read_metadata_tags, get_logger):
+        config = Config(config_dict={
+            'region': 'eu-west-1',
+            'tags': {'service-id': 'default-service', 'component-id': 'scout24/default-service'},
+            'stacks': {'stack': {'template-url': 'template.yml', 'tags': {'service-id': 'stack-service', 'component-id': 'scout24/stack-service'}}},
+        }, cli_tags='service-id=cli-service component-id=scout24/cli-service')
+
+        self.assertEqual('derived-service', config.default_tags['service-id'])
+        self.assertEqual('scout24/derived-service', config.default_tags['component-id'])
+        self.assertEqual('derived-service', config.stacks['stack'].tags['service-id'])
+        self.assertEqual('scout24/derived-service', config.stacks['stack'].tags['component-id'])
+        self.assertEqual(6, get_logger.return_value.warning.call_count)
 
     @staticmethod
     def create_config_object():

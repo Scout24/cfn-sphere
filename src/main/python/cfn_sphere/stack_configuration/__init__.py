@@ -1,4 +1,5 @@
 import os
+import re
 from six import string_types
 from collections import defaultdict
 
@@ -6,9 +7,56 @@ from cfn_sphere.file_loader import FileLoader
 from cfn_sphere.exceptions import InvalidConfigException, CfnSphereException
 from cfn_sphere.util import get_logger
 from cfn_sphere.stack_configuration.dependency_resolver import DependencyResolver
+from git import Repo, InvalidGitRepositoryError, NoSuchPathError
 
 ALLOWED_CONFIG_KEYS = ["region", "stacks", "service-role", "stack-policy-url", "timeout", "tags", "on_failure",
                        "disable_rollback"]
+GITHUB_URL_PATTERN = re.compile(r'^(?:https?|ssh)://(?:[^@/]+@)?github\.com/([^/]+)/([^/]+?)/?$|^[^@/]+@github\.com:([^/]+)/([^/]+?)/?$', re.I)
+
+
+def _normalize_repository_name(repository):
+    normalized = re.sub(r'[^a-z0-9._-]', '', repository.lower()).strip('-_.')
+    return normalized[:63]
+
+
+def _component_identity_from_git_url(git_url):
+    match = GITHUB_URL_PATTERN.match(git_url.strip())
+    if not match:
+        raise CfnSphereException("Unable to determine component-id from Git URL '{}': expected a GitHub repository URL".format(git_url))
+    organization, repository = match.group(1, 2) if match.group(1) else match.group(3, 4)
+    organization = organization.lower()
+    repository = re.sub(r'\.git$', '', repository, flags=re.I)
+    if organization not in ('scout24', 'flowfact'):
+        raise CfnSphereException("Unable to determine component-id: organization must be Scout24 or FLOWFACT")
+    service_id = _normalize_repository_name(repository)
+    if not service_id:
+        raise CfnSphereException("Unable to determine component-id: repository name contains no supported characters")
+    return organization + '/' + service_id, service_id, repository
+
+
+def _read_git_remotes(start_directory):
+    try:
+        repository = Repo(start_directory, search_parent_directories=True)
+    except (InvalidGitRepositoryError, NoSuchPathError) as error:
+        raise CfnSphereException("Unable to locate a Git repository while searching from '{}': {}".format(start_directory, error))
+    return [remote.url for remote in repository.remotes]
+
+
+def _resolve_component_identity(start_directory):
+    github_repository = os.environ.get('GITHUB_REPOSITORY', '').strip()
+    if github_repository:
+        if not re.match(r'^[^/\s]+/[^/\s]+$', github_repository):
+            raise CfnSphereException("GITHUB_REPOSITORY must use the organization/repository format")
+        return _component_identity_from_git_url('https://github.com/' + github_repository)
+    if any(key.startswith('GIT_URL_') and value for key, value in os.environ.items()):
+        raise CfnSphereException("Multiple Jenkins Git checkout URLs are configured; set GITHUB_REPOSITORY for the deployment repository")
+    git_url = os.environ.get('GIT_URL', '').strip()
+    if git_url:
+        return _component_identity_from_git_url(git_url)
+    remotes = _read_git_remotes(start_directory)
+    if len(remotes) != 1:
+        raise CfnSphereException("Expected exactly one Git remote but found {}; set GITHUB_REPOSITORY for the deployment repository".format(len(remotes)))
+    return _component_identity_from_git_url(remotes[0])
 
 
 class Config(object):
@@ -46,10 +94,19 @@ class Config(object):
         self.default_service_role = config_dict.get("service-role")
         self.default_stack_policy_url = config_dict.get("stack-policy-url")
         self.default_timeout = config_dict.get("timeout", 600)
-        self.default_tags = config_dict.get("tags", {})
+        self.default_tags = config_dict.get("tags", {}).copy()
+        for key in ('service-id', 'component-id'):
+            if key in metadata_tags and key in self.default_tags and self.default_tags[key] != metadata_tags[key]:
+                self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, self.default_tags[key], metadata_tags[key]))
         
         self.default_tags.update(metadata_tags)
         self.default_tags.update(self.cli_tags)
+
+        for key in ('service-id', 'component-id'):
+            if key in metadata_tags:
+                if key in self.cli_tags and self.cli_tags[key] != metadata_tags[key]:
+                    self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, self.cli_tags[key], metadata_tags[key]))
+                self.default_tags[key] = metadata_tags[key]
 
         self.default_tags["iac-tool"] = "cfn-sphere"
 
@@ -59,6 +116,12 @@ class Config(object):
 
         stacks = self._parse_stack_configs(config_dict)
         self.stacks = self._apply_stack_name_suffix_to_stacks(stacks, stack_name_suffix)
+        for stack in self.stacks.values():
+            for key in ('service-id', 'component-id'):
+                if key in metadata_tags:
+                    if key in stack.tags and stack.tags[key] != metadata_tags[key]:
+                        self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, stack.tags[key], metadata_tags[key]))
+                    stack.tags[key] = metadata_tags[key]
 
         self._validate_cli_params(self.cli_params, self.stacks)
 
@@ -134,14 +197,15 @@ class Config(object):
 
         tags = {}
         
-        # Only create service-id and component-id if id exists
-        if metadata.get('id'):
-            service_id = metadata["id"]
-            component_id = metadata.get('orgId', 'Scout24') + "/" + metadata["id"]
-            tags['service-id'] = service_id
-            tags['component-id'] = component_id
-            self.logger.info("Determined service-id to be %s" % service_id)
-            self.logger.info("Determined component-id to be %s" % component_id)
+        component_id, service_id, repository_name = _resolve_component_identity(os.path.dirname(file))
+        if repository_name != service_id:
+            self.logger.warning("Repository name %s was normalized to %s; this can create non-unique Backstage components" % (repository_name, service_id))
+        if metadata.get('id') != service_id:
+            self.logger.warning("metadata.yaml id %s differs from expected legacy service-id %s" % (metadata.get('id'), service_id))
+        tags['service-id'] = service_id
+        tags['component-id'] = component_id
+        self.logger.info("Determined service-id to be %s" % service_id)
+        self.logger.info("Determined component-id to be %s" % component_id)
         
         if metadata.get('confidentiality'):
             tags['confidentiality'] = metadata['confidentiality']
