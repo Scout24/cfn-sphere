@@ -29,6 +29,14 @@ class ConfigTests(TestCase):
         self.assertEqual('flowfact/example-service', component_id)
         self.assertEqual('example-service', service_id)
 
+    def test_component_identity_ignores_https_credentials(self):
+        for git_url in (
+                'https://username:password@github.com/Scout24/Example-Service.git',
+                'https://oauth-token@github.com/Scout24/Example-Service.git'):
+            component_id, service_id, _ = _component_identity_from_git_url(git_url)
+            self.assertEqual('scout24/example-service', component_id)
+            self.assertEqual('example-service', service_id)
+
     def test_component_identity_rejects_unsupported_organization(self):
         with self.assertRaises(CfnSphereException):
             _component_identity_from_git_url('https://github.com/OtherOrg/service.git')
