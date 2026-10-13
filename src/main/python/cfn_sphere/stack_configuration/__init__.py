@@ -14,24 +14,17 @@ ALLOWED_CONFIG_KEYS = ["region", "stacks", "service-role", "stack-policy-url", "
 GITHUB_URL_PATTERN = re.compile(r'^(?:https?|ssh)://(?:[^@/]+@)?github\.com/([^/]+)/([^/]+?)/?$|^[^@/]+@github\.com:([^/]+)/([^/]+?)/?$', re.I)
 
 
-def _normalize_repository_name(repository):
-    normalized = re.sub(r'[^a-z0-9._-]', '', repository.lower()).strip('-_.')
-    return normalized[:63]
-
-
 def _component_identity_from_git_url(git_url):
     match = GITHUB_URL_PATTERN.match(git_url.strip())
     if not match:
         raise CfnSphereException("Unable to determine component-id from Git URL '{}': expected a GitHub repository URL".format(git_url))
     organization, repository = match.group(1, 2) if match.group(1) else match.group(3, 4)
-    organization = organization.lower()
     repository = re.sub(r'\.git$', '', repository, flags=re.I)
-    if organization not in ('scout24', 'flowfact'):
-        raise CfnSphereException("Unable to determine component-id: organization must be Scout24 or FLOWFACT")
-    service_id = _normalize_repository_name(repository)
-    if not service_id:
-        raise CfnSphereException("Unable to determine component-id: repository name contains no supported characters")
-    return organization + '/' + service_id, service_id, repository
+    if organization.lower() != 'scout24':
+        raise CfnSphereException("Unable to determine component-id: organization must be Scout24")
+    if not repository or len(repository) > 100 or re.search(r'[^A-Za-z0-9._-]', repository):
+        raise CfnSphereException("Unable to determine component-id: repository name must contain 1-100 ASCII letters, digits, dots, hyphens, or underscores")
+    return organization + '/' + repository, repository, repository
 
 
 def _read_git_remotes(start_directory):
@@ -198,8 +191,6 @@ class Config(object):
         tags = {}
         
         component_id, service_id, repository_name = _resolve_component_identity(os.path.dirname(file))
-        if repository_name != service_id:
-            self.logger.warning("Repository name %s was normalized to %s; this can create non-unique Backstage components" % (repository_name, service_id))
         if metadata.get('id') != service_id:
             self.logger.warning("metadata.yaml id %s differs from expected legacy service-id %s" % (metadata.get('id'), service_id))
         tags['service-id'] = service_id
