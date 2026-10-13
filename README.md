@@ -22,6 +22,14 @@ A CLI tool intended to simplify AWS CloudFormation handling.
 
     pip install cfn-sphere
 
+## Repository identity tags
+
+When `metadata.yaml` is present, cfn-sphere derives `component-id` from `GITHUB_REPOSITORY`, Jenkins `GIT_URL`, or the sole configured Git remote. It searches parent directories for Git configuration and does not invoke the Git binary. Ambiguous checkout sources require an explicit `GITHUB_REPOSITORY` override.
+
+Only Scout24 repositories are supported. The organization and repository casing are preserved; valid repository names (1–100 ASCII letters, digits, dots, hyphens, and underscores) are retained without sanitization or truncation. Compatibility `service-id` is the original repository name. Conflicting identity tags and `metadata.yaml.id` produce warnings; derived tags take precedence.
+
+Release the Developer Portal validation update (DP-920, PR #709) before this producer change.
+
 ## Usage
 
     $ cf --help
