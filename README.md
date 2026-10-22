@@ -28,8 +28,6 @@ When `metadata.yaml` is present, cfn-sphere derives `component-id` from `GITHUB_
 
 Only Scout24 repositories are supported. The organization and repository casing are preserved; valid repository names (1–100 ASCII letters, digits, dots, hyphens, and underscores) are retained without sanitization or truncation. Compatibility `service-id` is the original repository name. Conflicting identity tags and `metadata.yaml.id` produce warnings; derived tags take precedence.
 
-Release the Developer Portal validation update (DP-920, PR #709) before this producer change.
-
 ## Usage
 
     $ cf --help
