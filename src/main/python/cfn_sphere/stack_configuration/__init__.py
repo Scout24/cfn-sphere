@@ -190,12 +190,13 @@ class Config(object):
 
         tags = {}
         
-        component_id, service_id, repository_name = _resolve_component_identity(os.path.dirname(file))
-        if metadata.get('id') != service_id:
-            self.logger.warning("metadata.yaml id %s differs from expected legacy service-id %s" % (metadata.get('id'), service_id))
-        tags['service-id'] = service_id
+        component_id, _, repository_name = _resolve_component_identity(os.path.dirname(file))
+        if metadata.get('id') != repository_name:
+            self.logger.warning("metadata.yaml id %s differs from the repository name %s" % (metadata.get('id'), repository_name))
+        if metadata.get('id'):
+            tags['service-id'] = metadata['id']
+            self.logger.info("Determined service-id to be %s" % metadata['id'])
         tags['component-id'] = component_id
-        self.logger.info("Determined service-id to be %s" % service_id)
         self.logger.info("Determined component-id to be %s" % component_id)
         
         if metadata.get('confidentiality'):

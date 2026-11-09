@@ -86,6 +86,41 @@ class ConfigTests(TestCase):
         self.assertEqual('scout24/derived-service', config.stacks['stack'].tags['component-id'])
         self.assertEqual(6, get_logger.return_value.warning.call_count)
 
+    @patch.dict(os.environ, {'GITHUB_REPOSITORY': 'Scout24/New-Repository'}, clear=True)
+    @patch('cfn_sphere.stack_configuration.get_logger')
+    @patch.object(Config, '_find_metadata_file', return_value='metadata.yaml')
+    @patch('cfn_sphere.stack_configuration.FileLoader.get_yaml_or_json_file', return_value={'id': 'legacy-service'})
+    def test_metadata_service_id_is_retained_despite_repository_and_tag_conflicts(self, _load_metadata, _find_metadata, get_logger):
+        config = Config(config_dict={
+            'region': 'eu-west-1',
+            'tags': {'service-id': 'default-service', 'component-id': 'Scout24/default-service'},
+            'stacks': {'stack': {'template-url': 'template.yml', 'tags': {
+                'service-id': 'New-Repository', 'component-id': 'Scout24/stack-service'}}},
+        }, cli_tags='service-id=cli-service component-id=Scout24/cli-service')
+
+        self.assertEqual('legacy-service', config.default_tags['service-id'])
+        self.assertEqual('Scout24/New-Repository', config.default_tags['component-id'])
+        self.assertEqual('legacy-service', config.stacks['stack'].tags['service-id'])
+        self.assertEqual('Scout24/New-Repository', config.stacks['stack'].tags['component-id'])
+        get_logger.return_value.warning.assert_any_call(
+            'metadata.yaml id legacy-service differs from the repository name New-Repository')
+
+    @patch.dict(os.environ, {'GITHUB_REPOSITORY': 'Scout24/New-Repository'}, clear=True)
+    @patch('cfn_sphere.stack_configuration.get_logger')
+    @patch.object(Config, '_find_metadata_file', return_value='metadata.yaml')
+    @patch('cfn_sphere.stack_configuration.FileLoader.get_yaml_or_json_file', return_value={})
+    def test_missing_metadata_id_does_not_generate_repository_based_service_id(self, _load_metadata, _find_metadata, get_logger):
+        config = Config(config_dict={
+            'region': 'eu-west-1',
+            'stacks': {'stack': {'template-url': 'template.yml'}},
+        })
+
+        self.assertNotIn('service-id', config.default_tags)
+        self.assertNotIn('service-id', config.stacks['stack'].tags)
+        self.assertEqual('Scout24/New-Repository', config.default_tags['component-id'])
+        get_logger.return_value.warning.assert_any_call(
+            'metadata.yaml id None differs from the repository name New-Repository')
+
     @staticmethod
     def create_config_object():
         config_dict = {
