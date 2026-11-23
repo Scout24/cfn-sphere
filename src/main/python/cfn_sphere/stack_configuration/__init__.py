@@ -24,7 +24,7 @@ def _component_identity_from_git_url(git_url):
         raise CfnSphereException("Unable to determine component-id: organization must be Scout24")
     if not repository or len(repository) > 100 or re.search(r'[^A-Za-z0-9._-]', repository):
         raise CfnSphereException("Unable to determine component-id: repository name must contain 1-100 ASCII letters, digits, dots, hyphens, or underscores")
-    return organization + '/' + repository, repository, repository
+    return organization + '/' + repository, repository
 
 
 def _read_git_remotes(start_directory):
@@ -114,7 +114,11 @@ class Config(object):
                 if key in metadata_tags:
                     if key in stack.tags and stack.tags[key] != metadata_tags[key]:
                         self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, stack.tags[key], metadata_tags[key]))
-                    stack.tags[key] = metadata_tags[key]
+            # Resolve ordinary CLI tag precedence before enforcing identity tags.
+            stack.tags.update(self.cli_tags)
+            stack.tags.update({
+                key: metadata_tags[key] for key in ('service-id', 'component-id') if key in metadata_tags
+            })
 
         self._validate_cli_params(self.cli_params, self.stacks)
 
@@ -190,7 +194,7 @@ class Config(object):
 
         tags = {}
         
-        component_id, _, repository_name = _resolve_component_identity(os.path.dirname(file))
+        component_id, repository_name = _resolve_component_identity(os.path.dirname(file))
         if metadata.get('id') != repository_name:
             self.logger.warning("metadata.yaml id %s differs from the repository name %s" % (metadata.get('id'), repository_name))
         if metadata.get('id'):

@@ -17,12 +17,11 @@ class ConfigTests(TestCase):
         self.stack_config_b = self.create_stack_config()
 
     def test_component_identity_preserves_git_url(self):
-        component_id, service_id, repository_name = _component_identity_from_git_url(
+        component_id, repository_name = _component_identity_from_git_url(
             'git@github.com:Scout24/__Example-Service.' + 'a' * 70 + '.git')
 
         self.assertEqual('Scout24/__Example-Service.' + 'a' * 70, component_id)
-        self.assertEqual('__Example-Service.' + 'a' * 70, service_id)
-        self.assertEqual(service_id, repository_name)
+        self.assertEqual('__Example-Service.' + 'a' * 70, repository_name)
 
     def test_component_identity_rejects_flowfact(self):
         with self.assertRaises(CfnSphereException):
@@ -30,7 +29,7 @@ class ConfigTests(TestCase):
 
     def test_component_identity_accepts_github_maximum_length(self):
         repository = 'A' * 100
-        self.assertEqual(('Scout24/' + repository, repository, repository),
+        self.assertEqual(('Scout24/' + repository, repository),
                          _component_identity_from_git_url('https://github.com/Scout24/' + repository))
 
     def test_component_identity_rejects_invalid_names(self):
@@ -42,9 +41,9 @@ class ConfigTests(TestCase):
         for git_url in (
                 'https://username:password@github.com/Scout24/Example-Service.git',
                 'https://oauth-token@github.com/Scout24/Example-Service.git'):
-            component_id, service_id, _ = _component_identity_from_git_url(git_url)
+            component_id, repository_name = _component_identity_from_git_url(git_url)
             self.assertEqual('Scout24/Example-Service', component_id)
-            self.assertEqual('Example-Service', service_id)
+            self.assertEqual('Example-Service', repository_name)
 
     def test_component_identity_rejects_unsupported_organization(self):
         with self.assertRaises(CfnSphereException):
@@ -52,7 +51,7 @@ class ConfigTests(TestCase):
 
     @patch.dict(os.environ, {'GITHUB_REPOSITORY': 'Scout24/Example-Service', 'GIT_URL': 'git@github.com:Scout24/ignored.git', 'GIT_URL_1': 'another'}, clear=True)
     def test_github_repository_takes_precedence(self):
-        self.assertEqual(('Scout24/Example-Service', 'Example-Service', 'Example-Service'), _resolve_component_identity(os.getcwd()))
+        self.assertEqual(('Scout24/Example-Service', 'Example-Service'), _resolve_component_identity(os.getcwd()))
 
     @patch.dict(os.environ, {'GIT_URL': 'git@github.com:Scout24/service.git', 'GIT_URL_1': 'another'}, clear=True)
     def test_multiple_jenkins_urls_require_github_repository(self):
@@ -62,7 +61,7 @@ class ConfigTests(TestCase):
     @patch('cfn_sphere.stack_configuration._read_git_remotes', return_value=['git@github.com:Scout24/remote-service.git'])
     @patch.dict(os.environ, {}, clear=True)
     def test_sole_remote_is_used_when_ci_variables_are_absent(self, _read_git_remotes):
-        self.assertEqual(('Scout24/remote-service', 'remote-service', 'remote-service'), _resolve_component_identity('/nested/deploy/cdk'))
+        self.assertEqual(('Scout24/remote-service', 'remote-service'), _resolve_component_identity('/nested/deploy/cdk'))
 
     @patch('cfn_sphere.stack_configuration._read_git_remotes', return_value=['git@github.com:Scout24/one.git', 'git@github.com:Scout24/two.git'])
     @patch.dict(os.environ, {}, clear=True)
