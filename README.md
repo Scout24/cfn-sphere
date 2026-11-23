@@ -24,7 +24,7 @@ A CLI tool intended to simplify AWS CloudFormation handling.
 
 ## Repository identity tags
 
-When `metadata.yaml` is present, cfn-sphere derives `component-id` from `GITHUB_REPOSITORY`, Jenkins `GIT_URL`, or the sole configured Git remote. It searches parent directories for Git configuration and does not invoke the Git binary. Ambiguous checkout sources require an explicit `GITHUB_REPOSITORY` override.
+cfn-sphere always derives `component-id` from `GITHUB_REPOSITORY`, Jenkins `GIT_URL`, or the sole configured Git remote, even when `metadata.yaml` is absent. Git discovery starts from the stack configuration directory (or the current directory for an in-memory configuration) and searches parent directories without invoking the Git binary. Missing or ambiguous repository sources fail with an error; set `GITHUB_REPOSITORY` explicitly to select the deployment repository. When present, `metadata.yaml` supplies `service-id`, confidentiality, and criticality; it is not required for `component-id`.
 
 Only Scout24 repositories are supported. The organization and repository casing are preserved; valid repository names (1–100 ASCII letters, digits, dots, hyphens, and underscores) are retained without sanitization or truncation. Compatibility `service-id` retains the `id` value from `metadata.yaml`, even when it differs from the repository name; the mismatch produces a warning. Conflicting config, CLI, and stack identity tags produce warnings and cannot override the metadata-derived `service-id` or repository-derived `component-id`. If metadata has no `id`, no automatic `service-id` is generated.
 

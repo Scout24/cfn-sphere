@@ -13,6 +13,10 @@ from cfn_sphere.stack_configuration import Config, StackConfig, InvalidConfigExc
 
 class ConfigTests(TestCase):
     def setUp(self):
+        # Configuration tests must not depend on the checkout's configured remotes.
+        environment = patch.dict(os.environ, {'GITHUB_REPOSITORY': 'Scout24/cfn-sphere'})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.stack_config_a = self.create_stack_config()
         self.stack_config_b = self.create_stack_config()
 
@@ -70,9 +74,11 @@ class ConfigTests(TestCase):
             _resolve_component_identity('/nested/deploy/cdk')
 
     @patch('cfn_sphere.stack_configuration.get_logger')
-    @patch.object(Config, '_read_metadata_tags', return_value={'service-id': 'derived-service', 'component-id': 'scout24/derived-service'})
+    @patch.object(Config, '_read_metadata_tags', return_value={'service-id': 'derived-service'})
+    @patch('cfn_sphere.stack_configuration._resolve_component_identity', return_value=('scout24/derived-service', 'derived-service'))
     @patch.object(Config, '_find_metadata_file', return_value='metadata.yaml')
-    def test_derived_identity_tags_override_default_cli_and_stack_tags(self, _find_metadata_file, _read_metadata_tags, get_logger):
+    def test_derived_identity_tags_override_default_cli_and_stack_tags(self, _find_metadata_file, _resolve_identity,
+                                                                     _read_metadata_tags, get_logger):
         config = Config(config_dict={
             'region': 'eu-west-1',
             'tags': {'service-id': 'default-service', 'component-id': 'scout24/default-service'},
@@ -117,8 +123,50 @@ class ConfigTests(TestCase):
         self.assertNotIn('service-id', config.default_tags)
         self.assertNotIn('service-id', config.stacks['stack'].tags)
         self.assertEqual('Scout24/New-Repository', config.default_tags['component-id'])
-        get_logger.return_value.warning.assert_any_call(
-            'metadata.yaml id None differs from the repository name New-Repository')
+        get_logger.return_value.warning.assert_not_called()
+
+    @patch.object(Config, '_find_metadata_file', return_value=None)
+    @patch.object(Config, '_read_metadata_tags')
+    @patch('cfn_sphere.stack_configuration._read_git_remotes', return_value=['git@github.com:Scout24/No-Metadata.git'])
+    def test_component_id_is_generated_without_metadata_for_every_source(self, read_remotes, read_metadata, find_metadata):
+        for environment in ({'GITHUB_REPOSITORY': 'Scout24/No-Metadata'},
+                            {'GIT_URL': 'git@github.com:Scout24/No-Metadata.git'}, {}):
+            with self.subTest(environment=environment), patch.dict(os.environ, environment, clear=True):
+                config = Config(config_dict={
+                    'region': 'eu-west-1',
+                    'stacks': {'stack': {'template-url': 'template.yml'}},
+                })
+                self.assertEqual('Scout24/No-Metadata', config.default_tags['component-id'])
+                self.assertEqual('Scout24/No-Metadata', config.stacks['stack'].tags['component-id'])
+                self.assertNotIn('service-id', config.stacks['stack'].tags)
+                read_metadata.assert_not_called()
+        read_remotes.assert_called_once_with(os.getcwd())
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch.object(Config, '_find_metadata_file', return_value=None)
+    @patch('cfn_sphere.stack_configuration.FileLoader.get_yaml_or_json_file')
+    @patch('cfn_sphere.stack_configuration._read_git_remotes', return_value=['git@github.com:Scout24/No-Metadata.git'])
+    def test_remote_discovery_without_metadata_starts_from_config_directory(self, read_remotes, load_config, find_metadata):
+        load_config.return_value = {'region': 'eu-west-1', 'stacks': {'stack': {'template-url': 'template.yml'}}}
+        config_file = os.path.join(os.getcwd(), 'deploy', 'cdk', 'stacks.yaml')
+        config = Config(config_file=config_file)
+        self.assertEqual('Scout24/No-Metadata', config.stacks['stack'].tags['component-id'])
+        read_remotes.assert_called_once_with(os.path.dirname(config_file))
+
+    @patch.object(Config, '_find_metadata_file', return_value=None)
+    @patch('cfn_sphere.stack_configuration._read_git_remotes')
+    def test_missing_or_ambiguous_remotes_fail_without_metadata(self, read_remotes, find_metadata):
+        for remotes in ([], ['git@github.com:Scout24/one.git', 'git@github.com:Scout24/two.git']):
+            with self.subTest(remotes=remotes), patch.dict(os.environ, {}, clear=True):
+                read_remotes.return_value = remotes
+                with self.assertRaisesRegex(CfnSphereException, 'GITHUB_REPOSITORY'):
+                    Config(config_dict={'region': 'eu-west-1', 'stacks': {'stack': {'template-url': 'template.yml'}}})
+
+    @patch.dict(os.environ, {'GITHUB_REPOSITORY': 'OtherOrg/service'}, clear=True)
+    @patch.object(Config, '_find_metadata_file', return_value=None)
+    def test_unsupported_organization_is_rejected_without_metadata(self, find_metadata):
+        with self.assertRaisesRegex(CfnSphereException, 'Scout24'):
+            Config(config_dict={'region': 'eu-west-1', 'stacks': {'stack': {'template-url': 'template.yml'}}})
 
     @staticmethod
     def create_config_object():

@@ -45,12 +45,14 @@ class StackActionHandlerTests(TestCase):
                         action.assert_called_once()
                         sent_stack = action.call_args[0][0]
                         expected_service = 'legacy-service' if metadata_present and metadata.get('id') else 'cli-service'
-                        expected_component = 'Scout24/New-Repository' if metadata_present else 'Scout24/cli'
+                        expected_component = 'Scout24/New-Repository'
                         self.assertEqual(expected_service, sent_stack.tags['service-id'])
                         self.assertEqual(expected_component, sent_stack.tags['component-id'])
                         self.assertEqual('cli', sent_stack.tags['custom'])
                         self.assertIn({'Key': 'service-id', 'Value': expected_service}, sent_stack.get_tags_list())
                         self.assertIn({'Key': 'component-id', 'Value': expected_component}, sent_stack.get_tags_list())
+                        logger.return_value.warning.assert_any_call(
+                            'Supplied component-id tag Scout24/cli is ignored; using Scout24/New-Repository')
                         if metadata_present and metadata.get('id'):
                             logger.return_value.warning.assert_any_call(
                                 'metadata.yaml id legacy-service differs from the repository name New-Repository')

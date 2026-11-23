@@ -75,31 +75,38 @@ class Config(object):
         self.region = config_dict.get("region")
         self.stack_name_suffix = stack_name_suffix
 
+        component_id, repository_name = _resolve_component_identity(self.stack_config_base_dir or os.getcwd())
+        self.logger.info("Determined component-id to be %s" % component_id)
+
         metadata_file = self._find_metadata_file(self.stack_config_base_dir)
-        metadata_tags = {}
+        automatic_tags = {'component-id': component_id}
         if metadata_file:
-            metadata_tags.update(self._read_metadata_tags(metadata_file))
+            automatic_tags.update(self._read_metadata_tags(metadata_file))
+            service_id = automatic_tags.get('service-id')
+            if service_id and service_id != repository_name:
+                self.logger.warning("metadata.yaml id %s differs from the repository name %s" %
+                                    (service_id, repository_name))
 
         stage = self._find_stage_tag()
         if stage:
-            metadata_tags['stage'] = stage
+            automatic_tags['stage'] = stage
 
         self.default_service_role = config_dict.get("service-role")
         self.default_stack_policy_url = config_dict.get("stack-policy-url")
         self.default_timeout = config_dict.get("timeout", 600)
         self.default_tags = config_dict.get("tags", {}).copy()
         for key in ('service-id', 'component-id'):
-            if key in metadata_tags and key in self.default_tags and self.default_tags[key] != metadata_tags[key]:
-                self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, self.default_tags[key], metadata_tags[key]))
+            if key in automatic_tags and key in self.default_tags and self.default_tags[key] != automatic_tags[key]:
+                self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, self.default_tags[key], automatic_tags[key]))
         
-        self.default_tags.update(metadata_tags)
+        self.default_tags.update(automatic_tags)
         self.default_tags.update(self.cli_tags)
 
         for key in ('service-id', 'component-id'):
-            if key in metadata_tags:
-                if key in self.cli_tags and self.cli_tags[key] != metadata_tags[key]:
-                    self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, self.cli_tags[key], metadata_tags[key]))
-                self.default_tags[key] = metadata_tags[key]
+            if key in automatic_tags:
+                if key in self.cli_tags and self.cli_tags[key] != automatic_tags[key]:
+                    self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, self.cli_tags[key], automatic_tags[key]))
+                self.default_tags[key] = automatic_tags[key]
 
         self.default_tags["iac-tool"] = "cfn-sphere"
 
@@ -111,13 +118,13 @@ class Config(object):
         self.stacks = self._apply_stack_name_suffix_to_stacks(stacks, stack_name_suffix)
         for stack in self.stacks.values():
             for key in ('service-id', 'component-id'):
-                if key in metadata_tags:
-                    if key in stack.tags and stack.tags[key] != metadata_tags[key]:
-                        self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, stack.tags[key], metadata_tags[key]))
+                if key in automatic_tags:
+                    if key in stack.tags and stack.tags[key] != automatic_tags[key]:
+                        self.logger.warning("Supplied %s tag %s is ignored; using %s" % (key, stack.tags[key], automatic_tags[key]))
             # Resolve ordinary CLI tag precedence before enforcing identity tags.
             stack.tags.update(self.cli_tags)
             stack.tags.update({
-                key: metadata_tags[key] for key in ('service-id', 'component-id') if key in metadata_tags
+                key: automatic_tags[key] for key in ('service-id', 'component-id') if key in automatic_tags
             })
 
         self._validate_cli_params(self.cli_params, self.stacks)
@@ -194,14 +201,9 @@ class Config(object):
 
         tags = {}
         
-        component_id, repository_name = _resolve_component_identity(os.path.dirname(file))
-        if metadata.get('id') != repository_name:
-            self.logger.warning("metadata.yaml id %s differs from the repository name %s" % (metadata.get('id'), repository_name))
         if metadata.get('id'):
             tags['service-id'] = metadata['id']
             self.logger.info("Determined service-id to be %s" % metadata['id'])
-        tags['component-id'] = component_id
-        self.logger.info("Determined component-id to be %s" % component_id)
         
         if metadata.get('confidentiality'):
             tags['confidentiality'] = metadata['confidentiality']
