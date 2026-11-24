@@ -38,9 +38,8 @@ class StackActionHandler(object):
             template = TemplateHandler.get_template(stack_config.template_url, stack_config.working_dir)
             parameters = self.parameter_resolver.resolve_parameter_values(stack_name, stack_config, self.cli_parameters)
 
-            full_tags = {}
-            full_tags.update(stack_config.tags)
-            full_tags.update(self.config.cli_tags)
+            # Config has already resolved CLI precedence and enforced identity tags.
+            full_tags = dict(stack_config.tags)
 
             stack = CloudFormationStack(template=template,
                                         parameters=parameters,
